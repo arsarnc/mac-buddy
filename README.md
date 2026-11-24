@@ -82,7 +82,47 @@ saves a PNG of every page (read back from the board's frame buffer) into `screen
 For pictures you want to share, start the sender with `MAC_BUDDY_ANON=1 mac/run.sh`: the Mac name,
 IP address and project names are replaced with generic ones.
 
+## Project layout
+
+```
+platformio.ini        board + library versions (espressif32 6.9.0, Arduino_GFX 1.4.9, U8g2, ArduinoJson 7)
+src/main.cpp          screens, touch (tap / swipe), backlight dimming, screenshot service
+src/mac.h, mac.cpp    stats model and the serial JSON parser
+mac/run.sh            starts the sender (creates its Python venv on first run)
+mac/mac_monitor.py    collects Mac stats and sends them once per second; takes screenshots on SIGUSR1
+mac/claude_usage.py   reads Claude Code usage from its local logs
+mac/screenshot.sh     asks the running sender to capture every page
+docs/images/          screenshots used in this README
+```
+
 ## Protocol
 
-The Mac sends one JSON line per second over USB serial (115200). The board keeps 150 seconds of
-history for the graphs. See `mac/mac_monitor.py` and `src/mac.cpp`.
+The Mac sends one JSON line per second over USB serial (115200); Claude Code usage is added every
+10 seconds. The board keeps 150 seconds of history for the graphs. See `mac/mac_monitor.py` and
+`src/mac.cpp`.
+
+Screenshots use a small request/response exchange on the same port: `SHOT <page>` renders and holds
+a page, `ROWS <y> <n>` returns n rows of raw RGB565 with a byte checksum, `DONE` resumes normal
+drawing. Blocks are small and retried because the ESP32-S3's USB-serial output can stall briefly.
+
+## Troubleshooting
+
+- **Upload fails with "No serial data received"**: try again; if it keeps failing, reset the board
+  over USB first, then upload:
+  ```bash
+  esptool --port /dev/cu.usbmodem101 --before usb-reset chip-id
+  ```
+  Unplugging and replugging the cable also works.
+- **Screen says "No signal"**: the sender isn't running (start `mac/run.sh`), or another program
+  has the serial port open.
+- **Board is listed under a different port**: `ls /dev/cu.usbmodem*`, then update `upload_port` in
+  `platformio.ini`. The sender picks the first `usbmodem` port by itself.
+- **CPU Temp shows "n/a"**: the temperature sensors are only read on Apple Silicon Macs.
+
+## Limitations
+
+- macOS only (uses `ioreg`, `vm_stat`, `sysctl` and Apple Silicon sensors).
+- Per-app GPU use needs admin rights, so the GPU page has no app list.
+- Claude Code usage covers Claude Code only (CLI and the desktop app's Code tab). claude.ai chats
+  and remaining plan limits are not available locally.
+- The sender runs in a terminal; close the terminal and the screen dims after a minute.
