@@ -4,6 +4,11 @@ A small USB side screen for your Mac: live CPU, GPU, memory, network, temperatur
 and Claude Code token usage on a 3.5" ESP32-S3 touch display. No Wi-Fi is needed; everything
 comes over the USB-C cable.
 
+<p align="center">
+  <img src="docs/images/overview.png" width="240" alt="Overview page">
+  <img src="docs/images/claude.png" width="240" alt="Claude Code usage page">
+</p>
+
 ## Hardware
 
 - **JC3248W535** board: ESP32-S3 (16 MB flash, 8 MB PSRAM), 3.5" 320×480 IPS, AXS15231B display +
@@ -24,6 +29,15 @@ comes over the USB-C cable.
 
 Tap a detail page to go back. Swipe left/right on the main screen for the Claude Code page.
 The screen dims when the Mac stops sending data; tap to wake it.
+
+| Overview | CPU | GPU |
+|:---:|:---:|:---:|
+| <img src="docs/images/overview.png" width="200" alt="Overview"> | <img src="docs/images/cpu.png" width="200" alt="CPU detail"> | <img src="docs/images/gpu.png" width="200" alt="GPU detail"> |
+| **Memory** | **Network** | **Claude Code** |
+| <img src="docs/images/memory.png" width="200" alt="Memory detail"> | <img src="docs/images/network.png" width="200" alt="Network detail"> | <img src="docs/images/claude.png" width="200" alt="Claude Code usage"> |
+
+Screenshots are read straight from the board's frame buffer (`mac/screenshot.sh`), taken with
+`MAC_BUDDY_ANON=1` so the Mac name, IP and project names are generic.
 
 ## Setup
 
@@ -65,6 +79,8 @@ mac/screenshot.sh
 ```
 
 saves a PNG of every page (read back from the board's frame buffer) into `screenshots/`.
+For pictures you want to share, start the sender with `MAC_BUDDY_ANON=1 mac/run.sh`: the Mac name,
+IP address and project names are replaced with generic ones.
 
 ## Protocol
 

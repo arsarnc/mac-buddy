@@ -25,6 +25,8 @@ import serial
 from claude_usage import ClaudeUsage
 
 BAUD = 115200
+# MAC_BUDDY_ANON=1 ./run.sh  -> generic Mac name, IP and project names (for public screenshots)
+ANON = os.environ.get("MAC_BUDDY_ANON") == "1"
 PAGES = ["1-overview", "2-cpu", "3-gpu", "4-memory", "5-network", "6-claude"]
 SHOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "screenshots")
 shot_wanted = False
@@ -342,7 +344,7 @@ def main():
     claude = ClaudeUsage()
     last_net, last_t = psutil.net_io_counters(), time.time()
     port, ser = None, None
-    print("Mac Monitor: sending stats to the ESP32 screen (Ctrl+C to stop)")
+    print("Mac Monitor: sending stats to the ESP32 screen (Ctrl+C to stop)" + (" [anonymized]" if ANON else ""))
 
     while True:
         time.sleep(1)
@@ -379,6 +381,8 @@ def main():
             net_info = network_info()
             try:
                 claude_info = claude.summary()
+                if ANON:
+                    claude_info["pj"] = [[f"project-{chr(97 + i)}", v] for i, (_, v) in enumerate(claude_info["pj"])]
             except Exception as e:  # never let the log reader stop the monitor
                 print(f"\rClaude usage: {e}")
         tick += 1
@@ -387,7 +391,7 @@ def main():
 
         msg = {
             "mac": 1,
-            "host": host,
+            "host": "MacBook" if ANON else host,
             "cpu": round(psutil.cpu_percent(None), 1),
             "ram": round(used * 100 / mem.total, 1),
             "cores": [round(c) for c in psutil.cpu_percent(percpu=True)],
@@ -410,7 +414,7 @@ def main():
             "dT": round(disk.total / 1e9, 1),
             **mem_info,
             "swT": round(swap.total / 2**30, 1),
-            **net_info,
+            **({**net_info, "ip": "192.168.1.42"} if ANON and net_info.get("ip") else net_info),
             "rxT": round(net.bytes_recv / 1e9, 2),
             "txT": round(net.bytes_sent / 1e9, 2),
             **({"cl": claude_info} if claude_info else {}),
