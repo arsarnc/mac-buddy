@@ -27,7 +27,7 @@ from claude_usage import ClaudeUsage
 BAUD = 115200
 # MAC_BUDDY_ANON=1 ./run.sh  -> generic Mac name, IP and project names (for public screenshots)
 ANON = os.environ.get("MAC_BUDDY_ANON") == "1"
-PAGES = ["1-overview", "2-cpu", "3-gpu", "4-memory", "5-network", "6-claude"]
+PAGES = ["1-overview", "2-cpu", "3-gpu", "4-memory", "5-network", "6-claude", "7-about"]
 SHOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "screenshots")
 shot_wanted = False
 
@@ -303,6 +303,55 @@ def network_info():
     return info
 
 
+def mac_info():
+    """Static 'About This Mac' details (no serial numbers). Refreshed every few minutes."""
+    info = {}
+    try:
+        out = subprocess.run(["ioreg", "-rd1", "-k", "product-name"], capture_output=True, text=True, timeout=3).stdout
+        m = re.search(r'"product-name" = <"([^"]+)">', out)
+        if m:
+            info["mdl"] = m.group(1)[:48]  # e.g. "MacBook Air (15-inch, M4, 2025)"
+        sp = json.loads(subprocess.run(["system_profiler", "SPHardwareDataType", "SPDisplaysDataType",
+                                        "SPPowerDataType", "-json"], capture_output=True, text=True,
+                                       timeout=15).stdout)
+        hw = sp.get("SPHardwareDataType", [{}])[0]
+        info.setdefault("mdl", hw.get("machine_name", "Mac"))
+        info["id"] = hw.get("machine_model", "")
+        info["chip"] = hw.get("chip_type", "") or hw.get("cpu_type", "")
+        procs = hw.get("number_processors", "")  # "proc 10:0:4:6" = total : ? : performance : efficiency
+        nums = [int(x) for x in re.findall(r"\d+", procs)]
+        if nums:
+            info["cpuN"] = nums[0]
+            if len(nums) >= 4:
+                info["cpuP"], info["cpuE"] = nums[-2], nums[-1]
+        info["mem"] = hw.get("physical_memory", "")
+        for gpu in sp.get("SPDisplaysDataType", []):
+            info["gpuN"] = int(gpu.get("sppci_cores", 0) or 0)
+            metal = gpu.get("spdisplays_mtlgpufamilysupport", "")
+            info["metal"] = metal.replace("spdisplays_metal", "Metal ") if metal else ""
+            for disp in gpu.get("spdisplays_ndrvs", []):
+                res = disp.get("_spdisplays_resolution") or ""
+                if res and "disp" not in info:
+                    info["disp"] = re.sub(r"\.00Hz", " Hz", res)[:28]
+        for p in sp.get("SPPowerDataType", []):
+            h = p.get("sppower_battery_health_info")
+            if h:
+                info["bCyc"] = h.get("sppower_battery_cycle_count", 0)
+                info["bMax"] = h.get("sppower_battery_health_maximum_capacity", "")
+                info["bHl"] = h.get("sppower_battery_health", "")
+    except (OSError, subprocess.TimeoutExpired, ValueError, IndexError, KeyError):
+        pass
+    try:
+        ver = subprocess.run(["sw_vers"], capture_output=True, text=True, timeout=3).stdout
+        v = re.search(r"ProductVersion:\s*(\S+)", ver)
+        b = re.search(r"BuildVersion:\s*(\S+)", ver)
+        info["os"] = f"macOS {v.group(1)}" + (f" ({b.group(1)})" if b else "") if v else ""
+    except OSError:
+        pass
+    info["boot"] = int(psutil.boot_time())
+    return info
+
+
 def host_name():
     try:
         name = subprocess.run(["scutil", "--get", "ComputerName"], capture_output=True, text=True).stdout.strip()
@@ -342,6 +391,7 @@ def main():
         p_cores = 0
     top_cpu, top_mem, net_info, tick = [], [], {}, 0
     claude = ClaudeUsage()
+    about = {}
     last_net, last_t = psutil.net_io_counters(), time.time()
     port, ser = None, None
     print("Mac Monitor: sending stats to the ESP32 screen (Ctrl+C to stop)" + (" [anonymized]" if ANON else ""))
@@ -377,6 +427,8 @@ def main():
         if tick % 2 == 0:
             top_cpu, top_mem = top_processes()
         claude_info = None
+        if tick % 300 == 0:
+            about = mac_info()
         if tick % 10 == 0:
             net_info = network_info()
             try:
@@ -418,6 +470,7 @@ def main():
             "rxT": round(net.bytes_recv / 1e9, 2),
             "txT": round(net.bytes_sent / 1e9, 2),
             **({"cl": claude_info} if claude_info else {}),
+            **({"info": about} if about and tick % 10 == 5 else {}),
             "t": int(now),
             "tz": -time.altzone if time.localtime().tm_isdst > 0 else -time.timezone,
         }

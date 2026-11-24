@@ -66,6 +66,31 @@ static void handleLine() {
     strlcpy(MAC.ip, doc["ip"] | "", sizeof(MAC.ip));
   }
 
+  JsonObjectConst inf = doc["info"];
+  if (!inf.isNull()) {
+    MacInfo &m = MAC.info;
+    strlcpy(m.model, inf["mdl"] | "Mac", sizeof(m.model));
+    strlcpy(m.modelId, inf["id"] | "", sizeof(m.modelId));
+    strlcpy(m.chip, inf["chip"] | "", sizeof(m.chip));
+    strlcpy(m.mem, inf["mem"] | "", sizeof(m.mem));
+    strlcpy(m.os, inf["os"] | "", sizeof(m.os));
+    strlcpy(m.metal, inf["metal"] | "", sizeof(m.metal));
+    strlcpy(m.display, inf["disp"] | "", sizeof(m.display));
+    strlcpy(m.battery, inf["bHl"] | "", sizeof(m.battery));
+    m.cpuN = inf["cpuN"] | 0;
+    m.cpuP = inf["cpuP"] | 0;
+    m.cpuE = inf["cpuE"] | 0;
+    m.gpuN = inf["gpuN"] | 0;
+    m.batteryCycles = inf["bCyc"] | -1;
+    const char *maxCap = inf["bMax"] | "";
+    if (*maxCap && m.battery[0]) {  // "Good, 96%"
+      strlcat(m.battery, ", ", sizeof(m.battery));
+      strlcat(m.battery, maxCap, sizeof(m.battery));
+    }
+    m.boot = inf["boot"] | 0L;
+    m.any = true;
+  }
+
   JsonObjectConst cl = doc["cl"];
   if (!cl.isNull()) {
     ClaudeStats &c = MAC.claude;

@@ -26,8 +26,10 @@ comes over the USB-C cable.
 | **Memory** (tap card) | Memory pressure (Normal / Warning / Critical), App / Wired / Compressed / Cache / Free, swap, top apps |
 | **Network** (tap card) | Download and upload graphs, connection type, interface, IP, totals since boot, peaks |
 | **Claude Code** (swipe) | Tokens today, current 5-hour window and when it resets, output tokens per minute, by model and project |
+| **About** (tap the Mac name) | Model (e.g. MacBook Air 15-inch, M4, 2025), macOS, chip, CPU / GPU cores, memory, storage, display, uptime, battery health |
 
 Tap a detail page to go back. Swipe left/right on the main screen for the Claude Code page.
+Tap the Mac name at the top for About This Mac.
 The screen dims when the Mac stops sending data; tap to wake it.
 
 | Overview | CPU | GPU |
@@ -166,6 +168,8 @@ You do not need to flash again. The board keeps the firmware when it is unplugge
 - CPU temperature: Apple Silicon HID temperature sensors (hottest SoC die sensor)
 - GPU: `ioreg` IOAccelerator performance statistics
 - Top apps: `ps`, grouped by app name
+- About This Mac: `ioreg` (model name), `system_profiler` (chip, cores, display, battery), `sw_vers`.
+  Serial numbers are not read.
 - Claude Code usage: Claude Code's local logs in `~/.claude/projects/**/*.jsonl`, read
   incrementally. Plan limits and claude.ai usage are not stored locally, so they are not shown.
 

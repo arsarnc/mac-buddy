@@ -4,6 +4,7 @@
 // No Wi-Fi is used. The screen dims when the Mac stops sending; tap it to wake.
 // Tap a card (CPU / GPU / Memory / Network) for its detail page; tap a detail page to go back.
 // Swipe left/right on the main screen to switch to the Claude Code usage page.
+// Tap the Mac name at the top for "About This Mac".
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -13,7 +14,7 @@
 #include <Arduino_GFX_Library.h>
 #include "mac.h"
 
-#define FW_VERSION "2.5.0"
+#define FW_VERSION "2.6.0"
 
 // ---- Pins (JC3248W535) ----
 #define LCD_CS   45
@@ -61,7 +62,7 @@ const uint16_t LEVEL_FILL[] = {rgb(24, 70, 50), rgb(90, 70, 20), rgb(90, 24, 24)
 static const char *LEVEL_NAME[] = {"NORMAL", "WARNING", "CRITICAL"};
 
 // ---- Pages ----
-enum Page { PG_OVERVIEW, PG_CPU, PG_GPU, PG_MEM, PG_NET, PG_CLAUDE };
+enum Page { PG_OVERVIEW, PG_CPU, PG_GPU, PG_MEM, PG_NET, PG_CLAUDE, PG_INFO };
 Page page = PG_OVERVIEW;
 bool shotActive = false;  // a screenshot is being pulled: no data arrives meanwhile, so do not show "No signal"
 bool live() { return macLive() || shotActive; }
@@ -245,6 +246,7 @@ void drawHeader() {
   bool isLive = live();
   char buf[32];
   text(u8g2_font_helvB12_tf, TXT, 14, 26, MAC.host);
+  chevron(20 + textWidth(u8g2_font_helvB12_tf, MAC.host), 20, MUTED);  // tap for About This Mac
   gfx->fillCircle(18, 42, 4, isLive ? CPUC : C_BAD);
   text(u8g2_font_helvR08_tf, MUTED, 28, 46, isLive ? "USB live" : "No signal - is mac/run.sh running?");
   if (MAC.timeSet) {
@@ -629,6 +631,77 @@ void drawClaudePage() {
   }
 }
 
+// ---- Page: About This Mac (tap the Mac name at the top) ----
+void laptopIcon(int x, int y, uint16_t c) {
+  gfx->fillRoundRect(x + 8, y, 56, 38, 4, c);
+  gfx->fillRect(x + 12, y + 4, 48, 30, BG);
+  gfx->fillRoundRect(x, y + 40, 72, 6, 3, c);
+}
+
+void infoRow(int y, const char *label, const char *value) {
+  text(u8g2_font_helvR10_tf, MUTED, 24, y, label);
+  text(u8g2_font_helvB10_tf, TXT, 296, y, value, RIGHT);
+}
+
+void drawInfoPage() {
+  detailHeader("About", nullptr, TXT);
+  const MacInfo &m = MAC.info;
+  if (!m.any) {
+    text(u8g2_font_helvR10_tf, MUTED, W / 2, 230, "Waiting for details from the Mac...", CENTER);
+    return;
+  }
+  char buf[48], name[48];
+
+  // Model: "MacBook Air (15-inch, M4, 2025)" -> big name + details below
+  gfx->fillRoundRect(12, 56, 296, 120, 12, CARD);
+  strlcpy(name, m.model, sizeof(name));
+  char *paren = strstr(name, " (");
+  const char *detail = "";
+  if (paren) {
+    *paren = 0;
+    detail = paren + 2;
+    char *close = strrchr((char *)detail, ')');
+    if (close) *close = 0;
+  }
+  text(u8g2_font_helvB18_tf, TXT, 24, 90, name);
+  text(u8g2_font_helvR12_tf, MUTED, 24, 114, detail);
+  text(u8g2_font_helvR10_tf, TXT, 24, 142, m.os);
+  text(u8g2_font_helvR08_tf, MUTED, 24, 162, MAC.host);
+  laptopIcon(222, 118, GRID);
+
+  // Specs
+  gfx->fillRoundRect(12, 182, 296, 232, 12, CARD);
+  int y = 206;
+  infoRow(y, "Chip", m.chip);
+  y += 24;
+  if (m.cpuP) snprintf(buf, sizeof(buf), "%d cores (%dP + %dE)", m.cpuN, m.cpuP, m.cpuE);
+  else snprintf(buf, sizeof(buf), "%d cores", m.cpuN);
+  infoRow(y, "CPU", buf);
+  y += 24;
+  snprintf(buf, sizeof(buf), "%d cores%s%s", m.gpuN, m.metal[0] ? ", " : "", m.metal);
+  infoRow(y, "GPU", m.gpuN ? buf : "--");
+  y += 24;
+  infoRow(y, "Memory", m.mem);
+  y += 24;
+  fmtGB(buf, sizeof(buf), MAC.diskTotal);
+  infoRow(y, "Storage", MAC.diskTotal > 0 ? buf : "--");
+  y += 24;
+  infoRow(y, "Display", m.display[0] ? m.display : "--");
+  y += 24;
+  infoRow(y, "Model ID", m.modelId);
+  y += 24;
+  long up = MAC.timeSet && m.boot ? (long)time(nullptr) - m.boot : 0;
+  if (up > 0) snprintf(buf, sizeof(buf), "%ldd %ldh %ldm", up / 86400, up / 3600 % 24, up / 60 % 60);
+  else strcpy(buf, "--");
+  infoRow(y, "Uptime", buf);
+  y += 24;
+  if (m.batteryCycles >= 0) snprintf(buf, sizeof(buf), "%s, %d cycles", m.battery, m.batteryCycles);
+  else strcpy(buf, "No battery");
+  infoRow(y, "Battery", buf);
+
+  text(u8g2_font_helvR08_tf, MUTED, W / 2, 466, "Mac Buddy  -  firmware v" FW_VERSION, CENTER);
+}
+
 void render() {
   gfx->fillScreen(BG);
   if (!MAC.any) drawWaiting();
@@ -639,6 +712,7 @@ void render() {
       case PG_MEM: drawMemDetail(); break;
       case PG_NET: drawNetDetail(); break;
       case PG_CLAUDE: drawClaudePage(); break;
+      case PG_INFO: drawInfoPage(); break;
     }
   gfx->flush();
 }
@@ -681,7 +755,9 @@ bool readTouch(int &x, int &y) {
 
 void handleTap(int x, int y) {
   if (!MAC.any) return;
-  if (page == PG_CLAUDE) {
+  if ((page == PG_OVERVIEW || page == PG_CLAUDE) && y < 36 && x < 220) {  // Mac name: About This Mac
+    page = PG_INFO;
+  } else if (page == PG_CLAUDE) {
     return;
   } else if (page != PG_OVERVIEW) {  // anywhere on a detail page goes back
     page = PG_OVERVIEW;
@@ -739,7 +815,7 @@ void shotService() {
   if (shotRequest >= 0) {
     if (!shotActive) shotSaved = page;
     shotActive = true;
-    page = (Page)constrain((int)shotRequest, 0, (int)PG_CLAUDE);
+    page = (Page)constrain((int)shotRequest, 0, (int)PG_INFO);
     shotRequest = -1;
     render();
     Serial.printf("SHOT %d %d\n", W, H);

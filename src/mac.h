@@ -28,6 +28,15 @@ struct ClaudeStats {
   uint8_t nProjects;
 };
 
+// "About This Mac" (static details, refreshed every 10 s)
+struct MacInfo {
+  bool any;
+  char model[48], modelId[16], chip[20], mem[12], os[32], metal[12], display[28], battery[32];
+  uint8_t cpuN, cpuP, cpuE, gpuN;
+  int batteryCycles;
+  long boot;  // unix time the Mac booted
+};
+
 struct MacStats {
   char host[32];
   // CPU
@@ -52,6 +61,8 @@ struct MacStats {
   int bat;  // % (-1 = no battery)
   bool charging, onAC;
   float diskUsed, diskTotal;  // GB
+  // About This Mac
+  MacInfo info;
   // Claude Code
   ClaudeStats claude;
   // Clock
