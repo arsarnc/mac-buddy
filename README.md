@@ -39,26 +39,125 @@ The screen dims when the Mac stops sending data; tap to wake it.
 Screenshots are read straight from the board's frame buffer (`mac/screenshot.sh`), taken with
 `MAC_BUDDY_ANON=1` so the Mac name, IP and project names are generic.
 
-## Setup
+## Step-by-step setup
 
-### 1. Flash the board
+About 15 minutes the first time, most of it waiting for downloads. Every command below is typed
+into the **Terminal** app (Applications → Utilities → Terminal), one at a time.
 
-Needs [PlatformIO](https://platformio.org/):
+### What you need
+
+- A **JC3248W535** board (3.5" ESP32-S3 touch display). Other ESP32 boards will not work: the
+  screen and pins are specific to this one.
+- A USB-C cable that carries **data** (some cheap cables only charge).
+- A Mac with macOS. Apple Silicon (M1 or newer) is needed for the CPU temperature.
+
+### Step 1: Install Apple's command line tools
+
+They include `git` and `python3`. Skip this step if `git --version` already prints a version.
 
 ```bash
-pio run -t upload
+xcode-select --install
 ```
 
-`platformio.ini` uses `/dev/cu.usbmodem101`; change `upload_port` if your board shows up elsewhere.
+A window opens; click **Install** and wait for it to finish.
 
-### 2. Run the sender on the Mac
+### Step 2: Download Mac Buddy
+
+```bash
+cd ~
+git clone https://github.com/arsarnc/mac-buddy.git
+cd mac-buddy
+```
+
+(Or click **Code → Download ZIP** on GitHub, unzip it, and `cd` into the folder.)
+Every following step runs from inside this `mac-buddy` folder.
+
+### Step 3: Install PlatformIO (the tool that builds and flashes the firmware)
+
+This installs it into its own folder so it doesn't touch anything else on your Mac:
+
+```bash
+python3 -m venv ~/platformio-venv
+~/platformio-venv/bin/pip install platformio
+```
+
+### Step 4: Plug in the board and find its port
+
+Connect the board to the Mac with the USB-C cable, then:
+
+```bash
+ls /dev/cu.usbmodem*
+```
+
+You should see one line such as `/dev/cu.usbmodem101`. That is the board's port; you need it in
+the next step.
+
+- **Nothing listed?** Try another cable (it may be charge-only) or another USB port.
+- **Still nothing?** Unplug the board, hold its **BOOT** button, plug it back in, then let go.
+
+### Step 5: Build and flash the firmware
+
+Replace `/dev/cu.usbmodem101` with the port from Step 4:
+
+```bash
+~/platformio-venv/bin/pio run -t upload --upload-port /dev/cu.usbmodem101
+```
+
+The first time, PlatformIO downloads the ESP32 toolchain (several hundred MB), so this can take
+5–10 minutes. It is done when you see `[SUCCESS]`.
+
+The board restarts and shows **Mac Monitor** with "Plug this screen into your Mac". That's correct:
+it is waiting for data from the Mac.
+
+If it fails with `No serial data received`, run it again. If it keeps failing, unplug and replug
+the board and try once more.
+
+### Step 6: Start the sender on the Mac
 
 ```bash
 mac/run.sh
 ```
 
-The first run creates `mac/.venv` and installs `psutil` and `pyserial`. Keep it running (Ctrl+C to
-stop). It finds the board on USB by itself and reconnects if the cable is unplugged.
+The first run takes a minute: it creates `mac/.venv` and installs `psutil` and `pyserial`. Then you
+should see:
+
+```
+Mac Monitor: sending stats to the ESP32 screen (Ctrl+C to stop)
+Connected to /dev/cu.usbmodem101
+```
+
+Within a second the board shows the Overview page with live graphs. You're done.
+
+### Step 7: Use it
+
+- **Tap** the CPU, GPU, Memory or Network card for its detail page; tap again to go back.
+- **Swipe** left or right on the main screen for Claude Code usage.
+- **Leave the Terminal window open.** The sender only runs while it is open. If you close it, or
+  press **Ctrl+C**, the screen shows "No signal" and dims after a minute.
+
+### Every day after that
+
+1. Plug in the board.
+2. Open Terminal and run:
+   ```bash
+   ~/mac-buddy/mac/run.sh
+   ```
+
+You do not need to flash again. The board keeps the firmware when it is unplugged.
+
+### Updating to a newer version
+
+1. Stop the sender with **Ctrl+C** in its Terminal window (it holds the USB port).
+2. Download the new version and flash it (use your port from Step 4):
+   ```bash
+   cd ~/mac-buddy
+   git pull
+   ~/platformio-venv/bin/pio run -t upload --upload-port /dev/cu.usbmodem101
+   ```
+3. Start the sender again:
+   ```bash
+   mac/run.sh
+   ```
 
 ## Where the data comes from (no sudo needed)
 
