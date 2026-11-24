@@ -1,0 +1,12 @@
+# Build output
+.pio/
+mac/.venv/
+__pycache__/
+*.pyc
+
+# Local only (not part of Mac Buddy)
+backup/
+screenshots/
+Everyday project/
+
+.DS_Store
